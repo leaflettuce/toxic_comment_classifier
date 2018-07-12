@@ -29,7 +29,7 @@ df_sub = pd.read_csv("data/sample_submission.csv")
 corpus = []
 
 #loop through df and clean comments
-for i in range(0, 5000):
+for i in range(0, 50000):
     #reg_exp to replace anything not text to a space and drop to lower case
     comment = re.sub('[^a-zA-Z]', ' ', df_train['comment_text'][i]).lower()
     #split into list for processing
@@ -47,16 +47,15 @@ for i in range(0, 5000):
         print((float(i)/len(df_train))*100)
         
 #Bag of Words Model - sparse matrix (tokenize)
-cv = CountVectorizer(max_features = 10000)   #max words to store 
+cv = CountVectorizer(max_features = 25000)   #max words to store 
 X = cv.fit_transform(corpus).toarray()
-y_tox = df_train.iloc[0:5000,2].values
-y_sev_tox = df_train.iloc[0:5000,3].values
-y_obs = df_train.iloc[0:5000,4].values
-y_threat = df_train.iloc[0:5000,5].values
-y_insult = df_train.iloc[0:5000,6].values
-y_hate = df_train.iloc[0:5000,7].values
+y_tox = df_train.iloc[0:50000,2].values
+y_sev_tox = df_train.iloc[0:50000,3].values
+y_obs = df_train.iloc[0:50000,4].values
+y_threat = df_train.iloc[0:50000,5].values
+y_insult = df_train.iloc[0:50000,6].values
+y_hate = df_train.iloc[0:50000,7].values
 
-#Dimensionality Reduction
 
 #model for each predicted type
 tests = {'y_tox' : y_tox, 
@@ -76,9 +75,10 @@ models = {'y_tox' : GaussianNB(),
 preds = {}
 
 test_names = ['y_tox', 'y_sev_tox', 'y_obs', 'y_threat', 'y_insult', 'y_hate']
+
 for i in test_names:
     #test_train split (toxic)
-    X_train, X_test, y_train, y_test = train_test_split(X, tests[i], test_size = 0.25, random_state = 42)
+    X_train, X_test, y_train, y_test = train_test_split(X, tests[i], test_size = 0.05, random_state = 42)
     
     #Train Model (naive bayes)
     models[i].fit(X_train, y_train)
@@ -94,7 +94,7 @@ for i in test_names:
 
 # RUN TEST THROUGH PIPELINE
 test_corpus = []
-for i in range(0, 5000):
+for i in range(130000, 153164):
     #reg_exp to replace anything not text to a space and drop to lower case
     comment = re.sub('[^a-zA-Z]', ' ', df_test['comment_text'][i]).lower()
     #split into list for processing
@@ -109,7 +109,7 @@ for i in range(0, 5000):
     test_corpus.append(comment)
     #track progress
     if i%1000 == 0:
-        print((float(i)/len(df_train))*100)
+        print((float(i)/50000)*100)
         
 #kaggle test array    
 X_kaggle = cv.transform(test_corpus).toarray()
@@ -117,20 +117,33 @@ kaggle_preds = {}
 
 #predict probability for each
 for i in test_names:
-    kaggle_preds[i] = models[i].predict_proba(X_kaggle)
-
+    print i
+    kaggle_preds[i] = models[i].predict(X_kaggle)
+     
 #list out in sample sub
-sample_sub = df_sub[0:5000]
-for i in range(0, 5000):
-    sample_sub.iloc[i,1] = kaggle_preds['y_tox'][i][1]
-    sample_sub.iloc[i,2] = kaggle_preds['y_sev_tox'][i][1]
-    sample_sub.iloc[i,3] = kaggle_preds['y_obs'][i][1]
-    sample_sub.iloc[i,4] = kaggle_preds['y_threat'][i][1]
-    sample_sub.iloc[i,5] = kaggle_preds['y_insult'][i][1]
-    sample_sub.iloc[i,6] = kaggle_preds['y_hate'][i][1]
-    #track progress
-    if i%500 == 0:
-        print(float(i)/len(sample_sub))
+sample_sub = pd.DataFrame(df_sub.iloc[130000:,0])
+sample_sub = sample_sub.reset_index(drop=True)
+sample_placement = pd.DataFrame(kaggle_preds)
+sample_placement = sample_placement.reindex_axis(['y_tox','y_sev_tox', 'y_obs','y_threat', 'y_insult', 'y_hate'], axis=1)
+sample_sub = sample_sub.join(sample_placement)
+sample_sub = sample_sub.rename(columns={'y_tox': 'toxic', 'y_sev_tox': 'sever_toxic',
+                                        'y_obs': 'obscene', 'y_threat': 'threat', 
+                                        'y)insult': 'insult', 'y_hate': 'indentity_hate'})
     
+    
+
+#sample1 = sample_sub
+sample4 = sample_sub
 #Write to CSV
-sample_sub.to_csv('tox_nb_sub_test.csv', index=False)
+sample4.to_csv('sample4.csv', index=False)
+
+#pull all back in and combine for submission
+one = pd.read_csv('sample1.csv')
+two = pd.read_csv('sample2.csv')
+three = pd.read_csv('sample3.csv')
+four = pd.read_csv('sample4.csv')
+
+submission = one.append(two).append(three).append(four).rename(columns={'sever_toxic' : 'severe_toxic',
+                                                                        'y_insult': 'insult',
+                                                                        'indentity_hate': 'identity_hate'})
+submission.to_csv('final_sub.csv', index=False)
